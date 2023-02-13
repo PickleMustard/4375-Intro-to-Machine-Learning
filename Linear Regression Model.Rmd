@@ -1,0 +1,43 @@
+---
+title: "Linear Models"
+author: "Dillon Carter"
+output: 
+  html_notebook:
+    df_print: paged
+  pdf_document: default
+editor_options:
+  chunk_output_type: inline
+---
+
+The data for this notebook was provided from [here]( https://www.kaggle.com/datasets/mirbektoktogaraev/should-this-loan-be-approved-or-denied?select=SBAnational.csv).
+
+```{r}
+getwd()
+data <- read.csv("data/SBAnational.csv", header=TRUE)
+str(data)
+```
+
+*The columns we care about are the following: 
+  +State (4)
+  +Zip (5)
+  +Term (11)
+  +NoEmp (12)
+  +NewExist (13)
+  +UrbanRural (17)
+  +RevLinCr (18)
+  +LowDoc (19)
+  +GrAppv (26)
+  
+
+
+```{r}
+data <- data[,c(4,5,11,12,13,17,18,19,26)]
+data$State <- factor(data$State)
+data$NewExist <- factor(data$NewExist)
+data$UrbanRural <- factor(data$UrbanRural)
+data$RevLineCr <- factor(data$RevLineCr)
+data$LowDoc <- factor(data$LowDoc)
+
+
+str(data)
+```
