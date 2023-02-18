@@ -1,0 +1,320 @@
+---
+title: "Regression"
+author: "Dillon Carter"
+date: "02/18"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  html_notebook:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+  markdown:
+    wrap: 72
+---
+
+The data for this notebook was provided from
+[here](https://www.kaggle.com/datasets/mirbektoktogaraev/should-this-loan-be-approved-or-denied?select=SBAnational.csv).
+
+*Linear Regression Explanation* Linear Regression seeks to find a line
+that trends from a predictor or a set of predictors to an output. As the
+predictors change in some fashion, the line will predict the supposed
+output. The relationship between the values can be described as the
+slope of the line w and the intercept b. The intercept tells where the
+line is expected to begin from and the slope describes how much the
+output changes with one-unit change in the input predictors. The
+returned model will have multiple methods of analyzing its accuracy. The
+predictors will have p and t values to describe how good a predictor
+they were in defining the slope of the line. The r-squared value will
+tell how close the predicted value from the found line is to the actual
+value. The closer the r-squared is to 1, the better the model.
+
+```{r}
+if(!require('tidyverse')){
+  install.packages('tidyverse')
+}
+library('tidyverse')
+data <- read.csv("data/SBAnational.csv", header=TRUE)
+set.seed(02222001)
+str(data)
+```
+
+Looking at the data, there are some columns that have too many
+individual factors to be be useful (City, Zip, Business Name). Each
+business is unique in its name so there really isn't an ability to
+predict based off name. Similarly, there are a large number of cities
+and zip codes in the data that don't have a lot of recurring values so
+training the data off them will likely not be accurate. The number of
+jobs created and retained are good information but are results based off
+the loan being approved. Similarly are the dates for the approval and
+disbursement. These are outside the scope of what I will be looking at.
+
+Some interesting data to pull from would be the NAICS, indicating the
+type of business, the term of the loan, whether the business was older
+than 2 years (NewExist), the UrbanRural divide, whether the borrower is
+on a revolving line of credit, the gross amount approved by the bank and
+the amount approved by the SBA. Something that might be interesting to
+try excluding to see if it affects the accuracy of predictions is
+whether the borrower is enrolled in the LowDoc loan program. Inclusion
+in the program will cap the max size of the loan to 150000\$.
+
+\*The columns to be analyzed are the following: +State (4) +NAICS (8)
++Term (11) +NoEmp (12) +NewExist (13) - +UrbanRural (17) - +RevLinCr
+(18) +LowDoc (19) +GrAppv (26) +SBA_Appv(27)
+
+With the chosen columns in place, refactoring them into better formats
+is done here. I'm changing stats, NAICS, NewExist, UrbanRural,
+RevLineCr, and LowDoc into factors as they have a set of known values
+that the tuple has to be a part of. Gross Approved and SBA Approved are
+both in non-numeric format, so I use the parse_number to get them into
+exclusively integer format. Then all NA data is omitted as there is
+plenty of data to use without it affecting the quality of results.The
+LowDoc column has some extraneous values outside of the "Y" or "N"
+desired so those rows are found and removed. Additionally, the NAICS
+column has some extraneous values in 0's. As this data is based off the
+2012 system, there is no sector containing 0 as the leading values. This
+isn't an insignificant amount of the data though. Roughly a quarter,
+200,000 entries, contain a 0. So I'm going to leave those in and see if
+it cannot be worked around without changing the data or removing them
+entirely.
+
+```{r}
+#Why is there so much weird data in these fields? Who looks at a yes/no question and answers "Q"?
+extraneous <- c("0","1","A","C","R","S", "T", "", "`", ",", "3", "2", "7", ".", "4", "-", "Q")
+no_zero <- c(0)
+extraneous
+no_zero
+str(data)
+sum(data$NAICS==0)
+data <- data[-c(which(data$LowDoc %in% extraneous)),]
+data <- data[-c(which(data$RevLineCr %in% extraneous)),]
+data <- data[-c(which(data$NewExist %in% no_zero)),]
+data <- data[-c(which(data$UrbanRural %in% no_zero)),]
+data <- na.omit(data)
+```
+
+```{r}
+data$State <- factor(data$State)
+data$NAICS <- as.numeric(substring(data$NAICS, 1, 2))
+data$NAICS <- factor(data$NAICS)
+data$NewExist <- factor(data$NewExist)
+data$UrbanRural <- factor(data$UrbanRural)
+data$RevLineCr <- factor(data$RevLineCr)
+data$LowDoc <- factor(data$LowDoc)
+data$GrAppv <- parse_number(data$GrAppv)
+data$SBA_Appv <- parse_number(data$SBA_Appv)
+data <- data[,c(4,8,11,12,13,17,18,19,26,27)]
+
+#Separate training and test data
+i <- sample(1:nrow(data), 0.8*nrow(data), replace=FALSE)
+train <- data[i,]
+test <- data[-i,]
+
+attach(train)
+```
+
+Now, before I get onto actually looking at predictors in a linear
+regression model, let's look at some relationships between the
+predictors and the amounts we want to predict, i.e. the gross amount
+approved by the bank and the gross amount approved by the SBA.
+
+One predictor that can lend some information about the loan is the term.
+Longer term loans will take a while for the lender to see back the money
+they lent in addition to the interest. So, they typically give them to
+businesses they are more sure about and can be confident in the fact
+that they will likely get their money back.
+
+```{r}
+hist(Term)
+```
+
+The vast majority of the loans fall under 100 months, which is about 8
+and a half years. This is a relatively short loan and gives an idea that
+the loans given out under the SBA program are typically on the smaller
+side. There are peaks around 240 and 280 months, Which are around 20
+years. These are likely larger loans that have smaller interest payments
+but the lender can be almost assured they will be paid back.
+
+```{r}
+summary(Term)
+```
+
+The summary confirms the brief look at the histogram above, with a weird
+outlier in the max at 527 months or 40 years. This could be an outlier
+where the borrower kept delaying loan payments and the term kept being
+extended. Luckily, it seems to be an extreme outlier based on the other
+summary factors.
+
+Something I am interested in is the correlation between loan terms and
+the states that business are incorporated in. I would expect that since
+the SBA is a national program, loan terms stay roughly the same between
+the states, but also for wealthier states to have a higher max than less
+wealthy states.
+
+```{r}
+levels(State)
+options(repr.plot.width=25, repr.plot.height=9)
+ggplot(data, aes(x=State, y=Term)) +
+  geom_boxplot(notch=FALSE)
+```
+
+As suspected, the line for the mean loan term is almost a horizontal
+line across all the states. Hawai'i, Vermont, New York and New Jersey
+are exceptions with means dipping below the general trend. Vermont is
+understandable as it has the lowest GDP of all states, but the other 3
+seem somewhat strange. Maybe there is a better correlation between the
+term and the number of employees? Let's first examine the statistics of
+the number of employees.
+
+```{r}
+summary(NoEmp)
+```
+
+The size of businesses seem to be grouped around less than 10 employees,
+with a few outliers with thousands of employees. So how many business
+are there that have more than 10, 100, or 1000 employees and how do
+those stats compare with the whole pie?
+
+```{r}
+#More than 10
+length(which(NoEmp > 10))
+summary(NoEmp[NoEmp > 10])
+
+#More than 100
+length(which(NoEmp > 100))
+summary(NoEmp[NoEmp > 100])
+
+#More than 1000
+length(which(NoEmp > 1000))
+summary(NoEmp[NoEmp > 1000])
+```
+
+Looking at the results, it is clear that the vast majority of the
+borrowers in the dataset have 10 or less employees. A larger minority
+have 100 or less and the rest are larger businesses. Now looking at a
+general correlation between the term and the number of employees.
+
+```{r}
+cor(Term, NoEmp)
+```
+
+So that would seem to suggest that the size of the borrower doesn't
+necessarily relate to the stability of the borrower in the lender's
+eyes.
+
+Let's plot the term against the SBA approved
+
+```{r}
+lm1 <- lm(SBA_Appv~Term, data=train)
+summary(lm1)
+```
+
+The term and the SBA Approved amount don't correlate all that well.
+There is a tiny p value, meaning the null hypothesis that the two values
+are unrelated can be rejected. So the model was good but the actual data
+didn't track well onto each other. The adjusted R-squared being just .27
+means that changes in the term really don't necessarily affect changes
+in the expected SBA approved. Plotting the residuals.
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm1)
+```
+
+Looking at the trend line of the residuals against fitted graph, it's
+smooth but doesn't follow a discernible line. The Normal Q-Q is good for
+theoretical quantiles up to 2 where it deviates greatly. The
+Scale-Location graph is similar to the 1st residuals graph. It is mostly
+linear with a non-linear bump near 0. Finally the residuals vs leverage
+graph has an outlier with a much higher influence than the bulk of the
+data. This could have skewed results. So building off the simple linear
+regression, let's look at one with more predictors, including NoEmp,
+NAICS, and Term.
+
+```{r}
+lm2 <- lm(SBA_Appv~Term+NAICS+NoEmp, data=train)
+summary(lm2)
+```
+
+For some of the NAICS predictors, the model is good; others not so much.
+But the R-square is still not good. .3098 is far from 1 but at least a
+little bit better than .27.
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm2)
+```
+
+Maybe plotting against a polynomial model would be better.
+
+```{r}
+lm3 <- lm(SBA_Appv~poly(State, NoEmp, LowDoc, RevLineCr), data=train)
+summary(lm3)
+```
+
+No that definitely made it worse. R-squared went down to .14.
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm3)
+```
+
+```{r}
+#Compare models
+anova(lm1, lm2)
+anova(lm1, lm3)
+anova(lm2, lm3)
+```
+
+With all three models plotted alongside with their residuals, the best
+model provided thus far was the secondary multiple predictor linear
+model. All the models had low p and t values meaning that the linear
+regression algorithm was at least mostly accurate. But, the r-squared
+for all was low. It was highest for the multiple predictor model which
+makes it the best case when trying to find an appropriate SBA_Appr from
+the predictors.
+
+```{r}
+pred1 <- predict(lm1, newdata=test)
+cor1 <- cor(pred1, test$SBA_Appv)
+mse1 <- mean((pred1-test$SBA_Appv)^2)
+rmse1 <- sqrt(mse1)
+```
+
+```{r}
+pred2 <- predict(lm2, newdata=test)
+cor2 <- cor(pred2, test$SBA_Appv)
+mse2 <- mean((pred2-test$SBA_Appv)^2)
+rmse2 <- sqrt(mse2)
+```
+
+```{r}
+pred3 <- predict(lm3, newdata=test)
+cor3 <- cor(pred3, test$SBA_Appv)
+mse3 <- mean((pred3-test$SBA_Appv)^2)
+rmse3 <- sqrt(mse3)
+```
+
+```{r}
+print(paste("Model 1: Correlation: ", cor1))
+print(paste("mse: ", mse1))
+print(paste("rmse: ", rmse1))
+print(paste("Model 2: Correlation: ", cor2))
+print(paste("mse: ", mse2))
+print(paste("rmse: ", rmse2))
+print(paste("Model 3: Correlation: ", cor3))
+print(paste("mse: ", mse3))
+print(paste("rmse: ", rmse3))
+```
+
+All in total, the correlation of the 1st 2 models are much closer than
+the 3rd model. It is likely not a polynomial line then. The higher
+correlation of the multiple predictor model seems to indicate that the
+method to predict the approved amount by the SBA will be through as many
+of the predictors as possible. This would make sense with the
+understanding behind the dataset. The lender will want as much
+information as possible about who they are lending to before they start
+giving out larger amounts of money. Some locations and types of
+businesses will be considered more reliable and will be given longer
+terms and allowed to borrow more.

@@ -1,0 +1,138 @@
+---
+title: "Classification"
+author: "Dillon Carter"
+date: "02/18"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  html_notebook:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+  markdown:
+    wrap: 72
+---
+
+The data for this notebook was provided from
+[here](https://www.kaggle.com/datasets/sakhawat18/asteroid-dataset).
+
+*Logistic Classification Algorithm*
+Logisitic classification is about taking a set of predictors and figuring out a qualitative value from those set of predictors. Using the log odds of the predictors set to a logistic curve, we give each set of predictors a location on the curve. Then, the curve is split and the values that lay to one side are classified as one qualitative value and the other side as another qualitative value. 
+
+```{r}
+if(!require('tidyverse')){
+  install.packages('tidyverse')
+}
+if(!require('e1071')){
+  install.packages('e1071')
+}
+if(!require('caret')){
+  install.packages('caret')
+}
+library('caret')
+library('tidyverse')
+library('e1071')
+data <- read.csv("data/asteroid_dataset.csv", header=TRUE)
+set.seed(02222001)
+str(data)
+```
+This model will be used to classify whether an asteroid is a Potentially Hazardous Asteroid or not. To do this, the predictors that matter are the NEO flag, the diameter, eccentricity, and the inclination.
+The NEO flag is a factor that is either "Y" or "N". The diameter is a numeric list, e (eccentricinty) is a numeric list, inclination (i) is a numeric list.
+
+```{r}
+extraneous <- c("")
+data <- data[-c(which(data$neo %in% extraneous))]
+data <- na.omit(data)
+```
+
+```{r}
+data <- data[,c(7,8,10,18,21)]
+data$neo <- factor(data$neo)
+data$pha <- factor(data$pha)
+data$eccentricity <- data$e
+data$inclination <- data$i
+data <- data[,c(1,2,3,6,7)]
+str(data)
+```
+
+```{r}
+#Separate training and test data
+temp <- sample(1:nrow(data), 0.8*nrow(data), replace=FALSE)
+train <- data[temp,]
+test <- data[-temp,]
+
+attach(train)
+```
+
+With all the data cleaning and restructuring done, let's examine the data.
+First looking at the summaries of diameter, inclination, and eccentricity.
+```{r}
+d_sum <- summary(diameter)
+e_sum <- summary(eccentricity)
+i_sum <- summary(inclination)
+
+print("Diameter Summary")
+d_sum
+print("Eccentricity Summary")
+e_sum
+print("Inclination Summary")
+i_sum
+sd(eccentricity)
+sd(inclination)
+```
+Looking at this, a few things are apparent. First, the diameter of most objects is quite small, less than 10 km. There are how,ever larger ones up to a greatest size of 900km. For reference, the Earth has a radius of 6400 km. The eccentricities of the asteroids, which is the deviation of an object from a circular object falls roughly around .10 to .20 with some objects up to .98. The smaller and closer to 0, the closer the object is to a circular orbit and less likely to colide with other objects in other orbits. The closer to 1 the closer to a parabolic trajectory. If it is 1 or greater, than gravity is unable to keep the object contained and will gain enough velocity to exit the gravity well. Finally, inclination describes the tilt at which an object orbits the sun. It describes the angle between it and a reference of Earth's orbit. Most objects have pretty acute inclinations. This makes sense as most of the solar system orbits on a roughly equal plane. But there are some outliers with much alrger inclinations. The key to determining the likelihood of an object colliding with Earth will be based off how ecentric the orbit is and its inclination mostly. At least, that is my hypothesis. So let's go about testing it. 
+
+```{r}
+cor(inclination, eccentricity)
+ggplot(train, aes(x=neo, y=eccentricity)) +
+  geom_boxplot(notch=FALSE)
+length(which(neo=="Y"))
+```
+
+Looking at the correlation between inclination and eccentricity, there is some there. But, for the most part, objects that orbit at different angles to Earth do not necessarily indicate a more ovular orbit. The distance to Earth is somewhat useful in determining eccentricity. The data set is only 586 objects which is minuscule compared to the number of objects outside of near-Earth orbit. So when looking at the box and whisker plot, the difference between min and max is almost nothing. There is a difference between the means and quartiles however. Objects that are closer to Earth are more likely to have more eccentric orbits than objects further from Earth. This does make sense. As Earth is closer to the sun, objects that have more eccentric orbits are going to come closer to Earth than those without eccentric orbits. 
+
+As I think that more eccentric objects are more dangerous, maybe it would be beneficial to take a look at the diameter of those objects compared to the eccentricity as well. After all, a tiny object that could intersect with Earth doesn't pose as much of a risk as some of those larger objects.
+```{r}
+gg <- ggplot(train, aes(x=eccentricity, y=diameter)) +
+  geom_point(aes(col=neo)) +
+  labs(subtitle="Eccentricity Against Diameter", y = "Diameter", x="Eccentricity")
+plot(gg)
+```
+This seems to say that as the asteroids get larger, the eccentricity tends to get smaller. So likely, the larger objects have more stable orbits.
+
+#Building Logistic Regression Model#
+```{r}
+glm1 <- glm(pha~., data=train, family="binomial")
+summary(glm1)
+```
+The model seems to be an okay model for predicting a threat to Earth. Most of the predictors are not great for the model with the exception of inclination. Even with that, there is a large drop between the Null deviance and the residual deviance. Given that the lack of fit drops by including more of the predictors, it can be safe to assume that more predictors gives a greater certainty that the object will fit the log odds. The AIC isn't that low which tells that there is quite a bit of deviance between different tuples. It might not be the most accurate of models in that case.
+Now to compare with the Naive Bayes.
+```{r}
+nb1 <- naiveBayes(pha~., data=train)
+nb1
+```
+The Naive Bayes algorithm takes the assumption that the variables are all independent from one another. It takes this assumption to find the probability an event occurs, the posterior, given its likelihood and prior over the marginal. The model above is finding that after going through each asteroid, the probability of it being a PHA is either yes or no. Given all that, the model thinks that the probability of any object being a hazard is .001296. The strongest indicator seems to be NEO as it has the least number of false positives and true negatives. Inclination seems somewhat untrustworthy as does the rate at which diameter gives false positives.
+
+#Predicting and Evaluating#
+```{r}
+probs <- predict(glm1, newdata=test, type="response")
+p1 <- predict(nb1, newdata=test, type="class")
+pred <- ifelse(probs>0.2, "Y", "N")
+acc <- mean(pred==test$pha)
+print(paste("accuracy = ", acc))
+
+table(pred, test$pha)
+table(p1, test$pha)
+confusionMatrix(as.factor(pred), reference=test$pha)
+confusionMatrix(as.factor(p1), reference=test$pha)
+```
+The logistic regression required a low probability to test for if an asteroid was a threat. Going greater than even 50% on dividing the logistic curve caused it to falsly label every asteroid as a non-threat. Set at a .2, it missed 9 instances of should be PHA and 66 instance of shouldn't. Compared to the Naive Bayes, which missed 2 true negatives and 231 false positives. The Naive Bayes is a bit more cautious of a model, in this circumstance, as it has a lower accuracy but will flag objects as potential hazards more often.
+The logistic regression is more likely to flag a true positive than naive bayes as the sensitivity is higher but is also less likely to correctly flag a true negative with a lower specificity rate. When each is adjusted for Kappa, the Bayes algorithm is much less likely to correctly flag than the logistic regression. The reason for why is that Bayes likely had a lower threshold for considering an asteroid as a threat. It flagged many more objects as threats than logistic regression did. So, by chance, when one did happen to be a threat, it did correctly flag it. But, the borderline threats that are not classified as such put it off.
+
+#Strengths, Weaknesses, Benefits, and Drawbacks of the Algorithms#
+Naive Bayes is a great method for looking at smaller datasets. It isn't an efficient algorithm so it takes time to run but can be extremely accurate when accounting for those smaller datasets. Once the datasets start to grow in size to sizes like this one, it becomes far less accurate. Its assumption that every predictor is independent can backfire as larger datasets can highlight some correlations between them. Logistic regression is better for these types of datasets. Because it makes use of gradient descent to create the logistic curve, it can be inefficient to run it for smaller datasets. But larger ones will take much more time to analyze each predictor in Bayes than through gradient descent. 
+In terms of the metrics used to evaluate the models, accuracy can be the most generally helpful but also the least insightful. It tells just the general rate at which the model correctly attributed the right classification to the data. It can help tell at just a glance whether a model is good or not but will not help when a deeper knowledge of how the model is failing is needed. The confusion matrix, specificity and sensitivity will help there as they describe what a model classified as wrong or right correctly. They can help tune a model that might not care about the rate of true positives when trying to tune the false positives out of the system. For example, in a case of testing for a disease, it would be far better to try to tune the system so that it will never incorrectly identify someone with the disease as without it but it is far less important to classify someone without as with it. 
+
+
+
