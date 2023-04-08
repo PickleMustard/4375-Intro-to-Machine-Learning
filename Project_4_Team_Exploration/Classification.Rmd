@@ -1,0 +1,169 @@
+---
+title: "Classification"
+author: "Aleezah Athar"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: inline
+Date: 18th March, 2023
+---
+This dataset is from https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
+First we set the seed to 1234 to get the same results each time 
+Then we read in the csv file which contains our data
+```{r}
+set.seed(1234)
+df <- read.csv("bank-full.csv", sep = ";", quote = "")
+df
+```
+We change all the character variables to factor variables so we can do classification. 
+Next, we divide into 80/20 train/test by randomly selecting 80% of the rows to be the training data and 20% to be the testing data. 
+```{r}
+for(i in 1:ncol(df)){
+  if(is.character(df[,i])){
+    df[,i] <- as.factor(df[,i])
+  }
+}
+
+levels(df$X.y.)<-c("no", "yes")
+
+ind <- sample(2, nrow(iris), replace=TRUE, prob=c(0.8, 0.2))
+df.train <- df[ind==1, 1:16]
+df.test <- df[ind==2, 1:16]
+df.trainLabels <- df[ind==1, 17]
+df.testLabels <- df[ind==2, 17]
+
+alternative.df.train <- df[ind==1,]
+alternative.df.test <- df[ind==2,]
+
+```
+
+
+We use at least 5 R functions for data exploration, using the training data. 
+We can use the names, dimension, summary, structure and head functions to get information about the data. We can also use the colSums and is.na functions together to check for any NA values. 
+```{r}
+names(df.train)
+dim(df.train)
+summary(df.train)
+str(df.train)
+head(df.train)
+colSums(is.na(df.train))
+```
+Creating 2 informative graphs using the training data. 
+```{r}
+plot(df.train$X.poutcome.)
+boxplot(df.train$X.age.)
+```
+## Logistic Regression
+
+Building a logistic regression model and outputting the summary using the glm and summary functions. 
+```{r}
+glm1<-glm(X.y.~., data=alternative.df.train, family=binomial)
+summary(glm1)
+```
+Predicting using Logistic Regression and computing the accuracy
+```{r}
+probs <- predict(glm1,newdata=alternative.df.test, type="response")
+pred <- ifelse(probs>0.5,2,1)
+pred <- as.factor(pred)
+levels(pred) <- list("no"="1","yes"="2")
+acc <- mean(as.integer(pred)==as.integer(alternative.df.test$X.y.))
+print(paste("glm1 accuracy: ", acc))
+table(pred, alternative.df.test$X.y.)
+```
+
+## KNN
+First I had to change all factor variable to numeric variables in order to perform KNN on the data. 
+
+```{r error=FALSE, warning=FALSE, message=FALSE}
+invisible({capture.output({
+
+
+new.df<-df
+new.df.train<-df.train
+new.df.test<-df.test
+new.df.trainLabels<-df.trainLabels
+new.df.testLabels<-df.testLabels
+
+for(i in 1:ncol(new.df)){
+  if(is.factor(new.df[,i])){
+    new.df[,i] <- as.numeric(new.df[,i])
+  }
+}
+#str(new.df)
+
+for(i in 1:ncol(new.df.train)){
+  if(is.factor(new.df.train[,i])){
+    new.df.train[,i] <- as.numeric(new.df.train[,i])
+  }
+}
+#str(new.df.train)
+
+for(i in 1:ncol(new.df.test)){
+  if(is.factor(new.df.test[,i])){
+    new.df.test[,i] <- as.numeric(new.df.test[,i])
+  }
+}
+#str(new.df.test)
+
+as.numeric(new.df.trainLabels)
+as.numeric(new.df.testLabels)
+
+})})
+```
+
+Using KNN and computing the accuracy 
+```{r}
+library(class)
+df_pred <- knn(train=new.df.train, test=new.df.test, cl=new.df.trainLabels, k=15)
+results <- df_pred == new.df.testLabels
+acc <- length(which(results==TRUE)) / length(results)
+# or combine into one line:
+#acc <- length(which(iris_pred == iris.testLabels)) / length(iris_pred)
+table(results, df_pred)
+acc
+```
+
+## Decision Trees
+
+### Using rpart
+```{r}
+library(rpart)
+tree_df <- rpart(X.y.~., data=df, method="class")
+tree_df
+summary(tree_df)
+plot(tree_df, uniform=TRUE)
+text(tree_df, use.n=TRUE, all=TRUE, cex=.6)
+```
+### Using tree
+
+```{r}
+#install.packages("tree")
+library(tree)
+tree_df2 <- tree(X.y.~., data=df)
+tree_df2
+summary(tree_df2)
+plot(tree_df2)
+text(tree_df2, cex=0.5, pretty=0)
+```
+
+### train and test 
+
+```{r}
+set.seed(1234)
+i <- sample(1:nrow(df), nrow(df)*0.8, replace=FALSE)
+train <- df[i,]
+test <- df[-i,]
+tree_df3 <- tree(X.y.~., data=train)
+pred <- predict(tree_df3, newdata=test, type="class")
+table(pred, test$X.y.)
+mean(pred==test$X.y.)
+```
+## Conclusion
+Comparing the results: 
+I noticed that the accuracy was very similar using the 3 different techniques. Logistic regression had an accuracy of about 90%. KNN had an accuracy of 88%. And decision trees had an accuracy of about 90%. 
+Providing some analysis on why the results were most likely achieved given how the
+algorithms work: 
+There can be differences in the accuracies because of several reasons. The first is that these algorithms work based on different assumptions and model data using different approaches. Like logistic regression assumes a linear relationship but on the other hand decision trees can capture non-linear relationships. Therefore if the relationship is not linear, decision trees can outperform logistic regression. In our case that did not happen as both gave similar accuracies. It is also important to note that KNN performs well on well-defined clusters and logistic regression works better with linearly separable data. There is also a possibility that the choice of K in KNN was not the best causing it to not perform as well as the other two. There is also a possibility of overfitting. 

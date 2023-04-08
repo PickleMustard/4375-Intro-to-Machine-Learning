@@ -1,0 +1,199 @@
+---
+title: "Group_Project"
+author: "Kyle Ayiku"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
+```
+
+# Regression
+
+This is the data set that I chose for this project.
+
+```{r}
+library(ggplot2)
+# Reading in the data set.
+setwd("C:/Users/amark/Downloads")
+housing <- read.csv("housing.csv")
+```
+
+## Dividing the data into train and test (Part A)
+```{r}
+
+# Eliminating the NAs from the dataset.
+housing <- housing[complete.cases(housing),]
+
+set.seed(1234)
+num <- sample(1:nrow(housing), 0.80 * nrow(housing), replace = FALSE)
+train <- housing[num,]
+test <- housing[-num,]
+
+sapply(train, function(x) sum(is.na(x) == TRUE))
+```
+
+
+
+I split the data into 80% train and 20% test and also checked to see if there any null values and unfortunately, I can see that total_bedrooms has 165 missing values.
+
+```{r}
+library(dplyr)
+library(janitor)
+
+# Cleaning the training data.
+clean <- clean_names(train)
+colnames(train)
+
+```
+
+I attempted to see if there is any of the training data that needs to be cleaned.
+
+
+## Exploratory Data Analysis (Part B)
+```{r}
+
+# Brief look at the data.
+head(train) # Displays the first few rows of the training data.
+dim(train)  # How many rows and columns are in the training data.
+summary(train) # General statistics of the training data. 
+```
+
+```{r}
+# Density plot for the response variable, "median_house_value."
+ggplot(data = train) +
+  geom_density(mapping = aes(x = median_house_value,
+                             fill = "red")) +
+  labs(title = "Density Plot of Median House Value")
+
+
+# Scatter plots for some predictors and median_house_value.
+ggplot(data = train) +
+  geom_point(mapping = aes(x = median_income,
+                           y = median_house_value)) +
+  labs(title = "Median Income vs. Median House Value")
+
+
+ggplot(data = train) +
+  geom_point(mapping = aes(x = households,
+                           y = median_house_value)) +
+  labs(title = "Households & the Median House Value")
+
+ggplot(data = train) + 
+  geom_point(mapping = aes(x = population,
+                           y = median_house_value)) +
+  labs(title = "Population vs. Median House Value")
+
+```
+
+```{r}
+# Displaying the correlation matrix.
+library(Hmisc)
+library(corrplot)
+
+cor(train[,c(3:9)])
+
+corrplot(cor(train[,c(3:9)]), method = "square")
+```
+
+## Regression Techniques (Part C)
+
+Linear Regression
+```{r}
+
+# Creating a multiple linear regression model with 
+# the target, median_house_value.
+
+lm1 <- lm(median_house_value ~ housing_median_age + total_rooms +
+            total_bedrooms + population + households +
+            median_income + longitude + latitude, data = train)
+summary(lm1)
+
+# Test data evaluation.
+pred1 <- predict(lm1, newdata = test)
+print(cor1 <- cor(pred1, test$median_house_value)) # Correlation.
+print(mse1 <- mean((pred1 - test$median_house_value)^2)) # The MSE.
+print(rmse1 <- sqrt(mse1)) # The RMSE.
+
+
+par(mfrow = c(2, 2))
+plot(lm1)
+```
+
+kNN Regression
+```{r}
+library(caret)
+
+# Model fitting.
+fit <- knnreg(train[,3:9], train[,2], k = 5)
+
+# Evaluation.
+pred2 <- predict(fit, test[,3:9])
+print(cor_knn1 <- cor(pred2, test$median_house_value)) # Correlation.
+print(mse_knn1 <- mean((pred2 - test$median_house_value)^2)) # The MSE.
+print(rmse2 <- sqrt(mse_knn1)) # The RMSE.
+```
+
+```{r}
+# Data scaling.
+train_scaled <- train[,3:9]
+means <- sapply(train_scaled, mean)
+stdvs <- sapply(train_scaled, sd)
+train_scaled <- scale(train_scaled, center = means, scale = stdvs)
+test_scaled <- scale(test[,3:9], center = means, scale = stdvs)
+
+# kNN for the scaled data.
+fit <- knnreg(train_scaled, train$median_house_value, k = 7)
+pred3 <- predict(fit, test_scaled)
+print(cor_knn2 <- cor(pred3, test$median_house_value))
+print(mse_knn2 <- mean((pred3 - test$median_house_value)^2))
+print(rmse3 <- sqrt(mse_knn2)) # The RMSE.
+
+```
+
+
+```{r}
+# Finding the best k algorithm.
+
+cor_k <- rep(0, 25)
+mse_k <- rep(0, 25)
+
+num <- 1
+for (k in seq(1, 43, 2))
+{
+  fit_k <- knnreg(train_scaled, train$median_house_value, k = k)
+  pred_k <- predict(fit_k, test_scaled)
+  cor_k[num] <- cor(pred_k, test$median_house_value) # Correlation value.
+  mse_k[num] <- mean((pred_k - test$median_house_value)^2) # The MSE.
+  print(paste("k = ", k, cor_k[num], mse_k[num]))
+  num <- num + 1
+}
+```
+
+```{r}
+# Plotting the kNN regression model.
+plot(1:25, cor_k, lwd = 3, col = 'navy', ylab = "", yaxt = 'n')
+par(new = TRUE)
+plot(1:25, mse_k, lwd = 3, col = 'maroon', labels = FALSE, 
+     ylab = "", yaxt = 'n')
+
+# Lowest and highest values.
+which.min(mse_k) # The lowest.
+
+which.max(cor_k) # The highest.
+```
+
+As seen from the algorithm and diagram above, the lowest MSE came from "k = 23"
+and the highest correlation coefficient came from "k = 5."
+
+
+
+## Comparison & Analysis (Parts C & D)
+Given the regression techniques which I implemented, the correlation coefficients and mean squared errors were varied. Logically speaking, this is expected in the sense that which kNN generally had  higher correlation coefficients of 99% whereas the linear regression technique only had one of roughly 80%, meaning that for the data set, kNN is superior in this case. Also, kNN had a lower mean squared error than linear regression. 
+
+Analyzing the techniques, there are clearly varying methods of retrieving the results as seen from the techniques above. Additionally, kNN has much more flexibility in terms of the methodologies the technique can process as the possibilities are theoretically endless. This is due to the fact that it 
+does not that there is a response variable, per se. Conversely, 
+linear regression is much simpler to utilize as there is a general approach to how the model will fit the data, given that there is not only a target, but also the predictors which contribute towards the target variable.
