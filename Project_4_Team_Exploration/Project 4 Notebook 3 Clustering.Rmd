@@ -1,0 +1,164 @@
+---
+title: "Notebook 3 Clustering"
+author: "Dillon Carter"
+date: "03/25"
+---
+
+The dataset used for this project is an online retail set pulled from UCI. It contains tuples containing
+data on Customer ID, quantity purchased, price purchased at, description of the data, and country of origin of purchaser alongside some other columns. 
+
+Importing required packages into the project.
+```{r}
+if(!require('tidyverse')){
+  install.packages('tidyverse')
+}
+if(!require('e1071')){
+  install.packages('e1071')
+}
+if(!require('caret')){
+  install.packages('caret')
+}
+if(!require('word2vec')){
+  install.packages('word2vec')
+}
+if(!require('cluster')){
+  install.packages('cluster')
+}
+if(!require('mclust')){
+  install.packages('mclust')
+}
+library('word2vec')
+library('caret')
+library('tidyverse')
+library('e1071')
+library('cluster')
+library('mclust')
+data <- read.csv("data/online_retail.csv", header=TRUE)
+set.seed(1234)
+str(data)
+
+normalize <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+```
+
+I'm taking the Customer ID, Price, Quantity, and Country of Origin as the values to evaluate on.
+I'm omitting NA data instead of replacing it, as there are enough values already in the dataset to where removing some will not affect the data in a major way. Additionally, I get rid of some values that are not possible, i.e. removing negative bought items or items with a negative purchase price.
+```{r}
+zero <- 0.0
+data <- data[, c(4,6,7,8)]
+data <- na.omit(data)
+data <- data[data$Quantity > 0,]
+data <- data[c(data$UnitPrice > as.numeric(zero)),]
+```
+
+
+I'm leaving this in, even though it failed. What I had attempted was to use the Word to Vec library to attempt to turn the character strings of Descriptions into a format that could be used in clustering. I wanted to create prediction matrices that could be used to help determine the likelyhood of a user ID purchasing something based on similar words. This was extremely time intensive and in the end, I couldn't get something to work in the time I had allotted.
+```{r}
+##temp <- data$Description
+#word_vector <- word2vec(temp, min_count = 1L, split=c(" \t", "\n."))
+#emb <- as.matrix(word_vector)
+```
+
+Here is checking to make sure that the data cleaning steps worked. 
+```{r}
+i <- which.min(data$Quantity)
+print(data[i,])
+i <- which.max(data$Quantity)
+print(data[i,])
+
+
+data_norm <- as.data.frame(lapply(data[,1:2], normalize))
+data_norm$CustomerID <- data$CustomerID
+#data_norm$Country <- factor(data$Country)
+
+##Attempted to convert character vectors into a usuable format for clustering
+##Unable to find a good solution
+#for(x in data$Description){
+#  split <- unlist(lapply(sapply(x, strsplit, "\\s+|\\.+", USE.NAMES=FALSE), function(Z) {Z[Z!= ""]}))
+#  vector <- rep(0, 50)
+#  for(y in split){
+#    predictions = tryCatch({
+#      vector <- vector + emb[y, ]
+#    }, error = function(e) "")
+#  }
+#  predictions <- rbind(predict(word_vector, vector, type='embedding'))
+#}
+
+```
+With clustering, it is good to know how many clusters to push everything into. Plotting by the sum of squares will give a good approximation of the number of clusters to form. Of course, this isn't the absolute value to follow so I will try with some other values.
+```{r}
+wss <- (nrow(data_norm)-1)*sum(apply(data_norm,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(data_norm,
+   centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+  ylab="Within groups sum of squares") 
+
+```
+It would seem that around 2 - 4 clusters is a good idea. The main change in the slope occurs between 2 and 3 clusters but doesn't really level off until around 4 to 5. 
+```{r}
+retail2KCluster <- kmeans(data_norm, 2, nstart=20)
+retail3KCluster <- kmeans(data_norm, 3, nstart=20)
+retail4KCluster <- kmeans(data_norm, 4, nstart=20)
+aggregate(data_norm,by=list(retail2KCluster$cluster),FUN=mean)
+aggregate(data_norm,by=list(retail3KCluster$cluster),FUN=mean)
+aggregate(data_norm,by=list(retail4KCluster$cluster),FUN=mean)
+data_norm2K <- data.frame(data_norm, retail2KCluster$cluster)
+data_norm3K <- data.frame(data_norm, retail3KCluster$cluster)
+data_norm4K <- data.frame(data_norm, retail4KCluster$cluster)
+
+```
+
+Now lets check the results of the clustering.
+
+```{r}
+clusplot(data_norm2K, retail2KCluster$cluster, color=TRUE, shade=TRUE,
+   labels=2, lines=0)
+
+```
+```{r}
+clusplot(data_norm3K, retail3KCluster$cluster, color=TRUE, shade=TRUE,
+   labels=2, lines=0)
+
+```
+```{r}
+clusplot(data_norm4K, retail4KCluster$cluster, color=TRUE, shade=TRUE,
+   labels=2, lines=0)
+
+```
+```{r}
+summary(retail2KCluster)
+summary(retail3KCluster)
+summary(retail4KCluster)
+
+```
+Heirachical Agglomerative
+The data's far too big for this clustering method, so I'm cutting it down drastically.
+```{r}
+temp <- sample(1:nrow(data_norm), 0.1*nrow(data_norm), replace=FALSE)
+reduced_normalized <- data[temp,]
+```
+
+```{r}
+# Ward Hierarchical Clustering
+euclidean_distance <- dist(reduced_normalized, method = "euclidean") # distance matrix
+retailHeirachical <- hclust(euclidean_distance, method="ward")
+plot(retailHeirachical) # display dendogram
+groups <- cutree(retailHeirachical, k=5) # cut tree into 5 clusters
+# draw dendogram with red borders around the 5 clusters
+rect.hclust(retailHeirachical, k=5, border="red") 
+
+```
+
+Model Based
+```{r}
+# Model Based Clustering
+
+retailModel <- Mclust(data_norm)
+summary(retailModel) # display the best model 
+```
+```{r}
+plot(retailModel)
+```
+The results for each of the models varied in its usefulness. The most useful I would say for this data set was the K means clustering algorithm. Thought I had to specify the number of clusters to use, the sum of squares algorithm identified three clusters that might be useful in 2, 3, and 4 clusters. 3 and 4 did not provide any useful information. But 2 classified information into 2 usable clusters that could be used with predictions. The heirarchical clustering is not useful in a dataset of this size. I attempted to cut the data set down to a 1/10th of its original size and still could not create a legible clustering graph. Going down to smaller sizes provided a more legible graph but due to the random nature of picking such a small number of values from the dataset, it did not provide a consistent method of identifying groups. Finally, the model based clustering was better than the heirachical but due to its more general nature, did not compare with the output produced by the K means cluster.
