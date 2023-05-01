@@ -15,3 +15,4 @@ Repository containing all work done for the 4375 Intro to Machine Learning class
 7) Using SKLearn 
   [SKLearn Demonstration](Project_5_SKLearn_ML/Using_SKLearn.pdf)
 8) Image Classification using Keras
+  [Classifying Sports Balls](Project_6/Sports_Balls_Deep_Learning_Classification.pdf)
