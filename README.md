@@ -13,4 +13,5 @@ Repository containing all work done for the 4375 Intro to Machine Learning class
 6) Team Exploration Project
   [My Contribution](Project_4_Team_Exploration/Notebook_3_Clustering.pdf)
 7) Using SKLearn 
+  [SKLearn Demonstration](Project_5_SKLearn_ML/Using_SKLearn.pdf)
 8) Image Classification using Keras
