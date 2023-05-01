@@ -5,6 +5,8 @@ This repository contains all my work from a machine learning class I took in col
 
 Continuing past this class, I might keep my eye open for interesting things to do regarding more deep-learning models and nueral networks. This is seems more of a hobby than a career choice if I'm being honest. I'd like to use my knowledge more for creating funny little networks to do wacky things in games than actually finding a career in it.
 
+[Resume Link](https://github.com/PickleMustard/DillonResumeRepo/blob/b8c33b8967eac8458c811b5c3477fc826bf6eb4e/Resume.pdf)
+
 ## Assignments:
 
 1) [Portfolio Creation](Overview_of_ML.pdf)
