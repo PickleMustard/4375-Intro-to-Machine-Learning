@@ -1,7 +1,9 @@
 # 4375-Intro-to-Machine-Learning
 Repository containing all work done for the 4375 Intro to Machine Learning class. 
 
-This repository contains all my work from a machine learning class I took in college. I had originally taken the class out of interest in more of the deep learning side but getting aquianted with the entire field was rather interesting. The connection between statistics and the field was not one I had thought of before the class but was an interesting side to it. The class went over a lot of the basics of Machine Learning.
+This repository contains all my work from a machine learning class I took in college. I had originally taken the class out of interest in more of the deep learning side but getting aquianted with the entire field was rather interesting. The connection between statistics and the field was not one I had thought of before the class but was an interesting side to it. The class went over a lot of the basics of Machine Learning, covering regression and classification algorithms, the R scripting language, and more advanced models avaialble in the Keras library for python. 
+
+Continuing past this class, I might keep my eye open for interesting things to do regarding more deep-learning models and nueral networks. This is seems more of a hobby than a career choice if I'm being honest. I'd like to use my knowledge more for creating funny little networks to do wacky things in games than actually finding a career in it.
 
 ## Assignments:
 
